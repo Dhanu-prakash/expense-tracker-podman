@@ -1,0 +1,32 @@
+# --- Stage 1: Build the React app ---
+FROM node:18 AS build
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Pass Supabase environment variables
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
+
+# Copy the rest of the source
+COPY . .
+
+# Build the app
+RUN npm run build
+
+# --- Stage 2: Serve the built app ---
+FROM node:18-alpine
+
+WORKDIR /app
+RUN npm install -g serve
+
+# Copy the build output from the previous stage
+COPY --from=build /app/dist ./dist
+
+EXPOSE 5173
+CMD ["serve", "-s", "dist", "-l", "5173"]
