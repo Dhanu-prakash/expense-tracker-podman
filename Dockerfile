@@ -5,13 +5,11 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# Pass Supabase environment variables
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_PUBLISHABLE_KEY
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
+# Optional: API base URL for the frontend build
+ARG VITE_API_BASE
+ENV VITE_API_BASE=$VITE_API_BASE
 
 # Copy the rest of the source
 COPY . .
@@ -19,14 +17,21 @@ COPY . .
 # Build the app
 RUN npm run build
 
-# --- Stage 2: Serve the built app ---
+# --- Stage 2: Runtime (API + static) ---
 FROM node:18-alpine
 
 WORKDIR /app
-RUN npm install -g serve
+ENV NODE_ENV=production
+RUN apk add --no-cache python3 make g++ \
+  && npm install -g serve
 
-# Copy the build output from the previous stage
+# Copy the build output and server
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/server ./server
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-EXPOSE 5173
-CMD ["serve", "-s", "dist", "-l", "5173"]
+# Runtime configuration
+ENV JWT_SECRET=change-me-in-prod
+EXPOSE 5173 4000
+CMD ["sh", "-c", "node server/index.js & serve -s dist -l 5173"]
